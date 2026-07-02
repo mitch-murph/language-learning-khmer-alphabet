@@ -12,7 +12,11 @@ were AFK, so I made these calls and recorded them here.
    fully-stable line (54.0.35).
 3. **iOS** is configured (bundle id, `supportsTablet`) and should work, but you only
    asked for Android + Web, so it is untested.
-4. **New Architecture** is enabled (`newArchEnabled: true`) — the SDK 54 default.
+4. **New Architecture is disabled** (`newArchEnabled: false`). It is the SDK 54 default,
+   but its C++ codegen produces object-file paths >260 chars, which breaks the native
+   Android (ninja/CMake) build on Windows. The old architecture builds cleanly and every
+   library used here supports it; no app code depends on new-arch-only APIs. Re-enable it
+   if you later build on macOS/Linux or enable Windows long-path support.
 
 ## Verification done
 - `tsc --noEmit` passes (strict mode).
@@ -92,3 +96,16 @@ were AFK, so I made these calls and recorded them here.
     `com.aksar.khmeralphabet`. Change before publishing.
 30. Default launcher/splash icons from the Expo template are still in `assets/` — replace
     with real Aksar branding before release.
+31. `npm run apk` / `apk:build` produce a standalone, debug-keystore-signed release APK and
+    install/build it locally. To work from any terminal, the scripts inject `JAVA_HOME` and
+    `ANDROID_HOME` via `cross-env` with **paths hard-coded for the original dev machine**
+    (Android Studio's bundled JDK + the local SDK). Adjust those two paths in `package.json`
+    on a different machine, or rely on your own persisted env vars instead.
+32. The generated `android/` (and `ios/`) folders are git-ignored; `expo run:android`
+    regenerates them from `app.json` on demand, so the repo stays a clean managed project.
+    Running the apk scripts leaves `android`/`ios` in `package.json` as `expo run:android`/
+    `expo run:ios` (what `expo prebuild` writes) — this is intentional, so there's no churn.
+    Use `npm start` for the quick Expo Go dev loop.
+33. A GitHub Actions workflow (`.github/workflows/deploy-frontend.yml`) deploys the web
+    build to GitHub Pages on push to `main` (uses `npm run build:web` and the `baseUrl`
+    experiment in `app.json`).

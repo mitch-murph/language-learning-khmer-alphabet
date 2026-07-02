@@ -9,8 +9,9 @@
     "web": "expo start --web",
     "build:web": "expo export --platform web",
     "typecheck": "tsc --noEmit",
-    "apk": "expo run:android --variant release",
-    "apk:build": "expo prebuild --platform android && cd android && gradlew assembleRelease"
+    "apk": "cross-env JAVA_HOME=\"C:\\Program Files\\Android\\Android Studio\\jbr\" ANDROID_HOME=\"C:\\Users\\Mitchell\\AppData\\Local\\Android\\Sdk\" expo run:android --variant release",
+    "apk:build": "expo prebuild --platform android --no-install && cross-env JAVA_HOME=\"C:\\Program Files\\Android\\Android Studio\\jbr\" ANDROID_HOME=\"C:\\Users\\Mitchell\\AppData\\Local\\Android\\Sdk\" npm run _apk:assemble",
+    "_apk:assemble": "cd android && .\\gradlew.bat assembleRelease"
   },
   "dependencies": {
     "@expo-google-fonts/battambang": "^0.4.1",
@@ -38,6 +39,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.0",
+    "cross-env": "^10.1.0",
     "typescript": "~5.9.2"
   },
   "private": true

@@ -24,12 +24,34 @@ the port.
 ```bash
 npm install
 
+npm start          # dev server — open in Expo Go (scan QR) for the fast dev loop
 npm run web        # open in a browser
-npm run android    # open on an Android device/emulator (needs Android SDK / Expo Go)
+npm run android    # build & install a native dev build (needs Android SDK + JDK env)
 npm run typecheck  # tsc --noEmit
 ```
 
 To scan for bundling errors without a device: `npx expo export --platform web`.
+
+## Install a standalone APK on your phone
+
+```bash
+npm run apk         # build a signed release APK and install it on the connected phone
+npm run apk:build   # just build the APK (no device needed)
+```
+
+`npm run apk` runs `expo run:android --variant release`: it compiles a standalone,
+release-signed APK (no Metro dev server required) and installs it on a USB-connected
+device with USB debugging enabled. `apk:build` only builds it — find the file at
+`android/app/build/outputs/apk/release/app-release.apk` and sideload it manually.
+
+The `apk` scripts inject `JAVA_HOME` (Android Studio's bundled JDK) and `ANDROID_HOME`
+(the local Android SDK) via `cross-env`, so they work from any terminal without extra
+setup — **but those two paths are hard-coded for the original dev machine**
+(`C:\Program Files\Android\Android Studio\jbr` and
+`C:\Users\Mitchell\AppData\Local\Android\Sdk`). Edit them in `package.json` if your JDK/SDK
+live elsewhere. The release build is signed with the debug keystore — fine for personal
+sideloading, but generate a real upload key before publishing to the Play Store. The app
+builds on the **old RN architecture** on Windows (see `ASSUMPTIONS.md`).
 
 ## Project structure
 
