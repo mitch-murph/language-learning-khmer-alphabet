@@ -7,7 +7,7 @@
     "icon": "./assets/icon.png",
     "scheme": "aksar",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.aksar.khmeralphabet"
@@ -29,6 +29,9 @@
     "plugins": [
       "expo-audio",
       "expo-font"
-    ]
+    ],
+    "experiments": {
+      "baseUrl": "/language-learning-khmer-alphabet"
+    }
   }
 }
