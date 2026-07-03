@@ -27,11 +27,9 @@ const MODES: Mode[] = [
 
 function ModeCard({
   mode,
-  width,
   onPress,
 }: {
   mode: Mode;
-  width: number | string;
   onPress: () => void;
 }) {
   const { c, sh } = useTheme();
@@ -40,7 +38,8 @@ function ModeCard({
       onPress={onPress}
       style={({ pressed }) => [
         {
-          width: width as number,
+          flexGrow: 1,
+          flexBasis: 260,
           backgroundColor: c.surface,
           borderWidth: 1,
           borderColor: pressed ? c.line2 : c.line,
@@ -82,7 +81,6 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
   const { width } = useWindowDimensions();
   const contentW = Math.min(width - 40, 1080);
   const twoCol = contentW > 560;
-  const cardW = twoCol ? (contentW - 14) / 2 : contentW;
 
   const samples = [CONSONANTS[0], CONSONANTS[2], CONSONANTS[5], CONSONANTS[10]];
 
@@ -183,7 +181,6 @@ export function HomeScreen({ navigation }: ScreenProps<'Home'>) {
           <ModeCard
             key={m.title + i}
             mode={m}
-            width={cardW}
             onPress={() => navigation.navigate(m.route as never)}
           />
         ))}
