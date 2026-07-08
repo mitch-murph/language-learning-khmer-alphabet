@@ -15,8 +15,10 @@ import { DISPLAY, MONO, UI } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeContext';
 import { ScreenProps } from '../navigation/types';
 
-const PACE_MIN = 1.0;
-const PACE_MAX = 8.0;
+const PAUSE_MIN = 0;
+const PAUSE_MAX = 8.0;
+const REPEAT_GAP = 900; // ms between repeated plays of the same audio, independent of the pause
+const CHAR_PLAY_DELAY = 500; // ms to let the glyph register before its sound plays
 
 export function AutoplayScreen({ navigation }: ScreenProps<'Autoplay'>) {
   const { c, sh } = useTheme();
@@ -24,7 +26,7 @@ export function AutoplayScreen({ navigation }: ScreenProps<'Autoplay'>) {
   const pool = app.getPool(app.scope);
 
   const [order, setOrder] = usePersistedState<'char' | 'sound'>('km_auto_order', 'char');
-  const [pace, setPace] = usePersistedState('km_auto_pace', 3.0);
+  const [pause, setPause] = usePersistedState('km_auto_pause', 3.0);
   const [repeat, setRepeat] = usePersistedState<1 | 2 | 3>('km_auto_repeat', 1);
   const [playing, setPlaying] = useState(false);
   const [idx, setIdx] = useState(0);
@@ -36,15 +38,17 @@ export function AutoplayScreen({ navigation }: ScreenProps<'Autoplay'>) {
     timers.current.forEach(clearTimeout);
     timers.current = [];
   };
-  const later = (fn: () => void, ms: number) => {
-    const t = setTimeout(fn, ms);
+  const wait = (ms: number) => new Promise<void>((resolve) => {
+    const t = setTimeout(resolve, ms);
     timers.current.push(t);
-    return t;
-  };
+  });
+  // bumped whenever the in-flight scheduler chain must be abandoned (pause/skip/scope change)
+  const genRef = useRef(0);
 
   // (re)build deck when pool/scope changes; stop playback
   useEffect(() => {
     deckRef.current = pool.slice(); // canonical order — no shuffle
+    genRef.current++;
     setIdx(0);
     setPlaying(false);
     setRevealed(order === 'char');
@@ -58,36 +62,58 @@ export function AutoplayScreen({ navigation }: ScreenProps<'Autoplay'>) {
 
   const advance = useCallback(() => setIdx((i) => i + 1), []);
 
-  // main scheduler
+  // main scheduler — waits for each clip to actually finish before the pause (and next clip) begins
   useEffect(() => {
     clearTimers();
     if (!playing || !current) return;
-    const ms = pace * 1000;
+    const myGen = genRef.current;
+    const stale = () => genRef.current !== myGen;
     const src = itemAudio(current, app.audioSet);
     const reps = src != null ? repeat : 1;
 
-    if (order === 'char') {
-      setRevealed(true);
-      for (let k = 0; k < reps; k++) {
-        const at = k * ms + (k === 0 ? Math.min(700, ms * 0.3) : 0);
-        later(() => {
-          if (src != null) AudioBus.play(src, 'auto');
-        }, at);
+    async function run() {
+      if (order === 'char') {
+        setRevealed(true);
+        await wait(CHAR_PLAY_DELAY);
+        if (stale()) return;
+      } else {
+        setRevealed(false);
       }
-      later(advance, reps * ms);
-    } else {
-      setRevealed(false);
+
       for (let k = 0; k < reps; k++) {
-        later(() => {
-          if (src != null) AudioBus.play(src, 'auto');
-        }, k * ms);
+        if (src != null) {
+          await AudioBus.playAndWait(src, 'auto');
+        } else {
+          await wait(REPEAT_GAP);
+        }
+        if (stale()) return;
+        if (k < reps - 1) {
+          await wait(REPEAT_GAP);
+          if (stale()) return;
+        }
       }
-      later(() => setRevealed(true), ms * 0.55);
-      later(advance, reps * ms);
+
+      const pauseMs = pause * 1000;
+      if (order === 'sound') {
+        // stay hidden for the first half (time to guess), reveal for the second half (confirmation)
+        await wait(pauseMs / 2);
+        if (stale()) return;
+        setRevealed(true);
+        await wait(pauseMs / 2);
+      } else {
+        await wait(pauseMs);
+      }
+      if (stale()) return;
+      advance();
     }
-    return clearTimers;
+
+    run();
+    return () => {
+      genRef.current++;
+      clearTimers();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, idx, order, pace, repeat, app.audioSet, current && itemKey(current)]);
+  }, [playing, idx, order, pause, repeat, app.audioSet, current && itemKey(current)]);
 
   useEffect(() => () => {
     clearTimers();
@@ -96,6 +122,7 @@ export function AutoplayScreen({ navigation }: ScreenProps<'Autoplay'>) {
 
   function togglePlay() {
     if (playing) {
+      genRef.current++;
       setPlaying(false);
       clearTimers();
       AudioBus.stop();
@@ -105,6 +132,7 @@ export function AutoplayScreen({ navigation }: ScreenProps<'Autoplay'>) {
     }
   }
   function skip() {
+    genRef.current++;
     clearTimers();
     AudioBus.stop();
     setRevealed(order === 'char');
@@ -136,7 +164,7 @@ export function AutoplayScreen({ navigation }: ScreenProps<'Autoplay'>) {
   const hasAudio = current ? itemAudio(current, app.audioSet) != null : false;
   const showGlyph = revealed || !playing;
 
-  const paceLabel = pace <= 1.6 ? 'Rapid' : pace <= 3 ? 'Brisk' : pace <= 5 ? 'Steady' : 'Relaxed';
+  const pauseLabel = pause <= 1.6 ? 'Rapid' : pause <= 3 ? 'Brisk' : pause <= 5 ? 'Steady' : 'Relaxed';
 
   const orderBtn = (val: 'char' | 'sound', icon: 'grid' | 'ear', label: string) => {
     const on = order === val;
@@ -237,11 +265,11 @@ export function AutoplayScreen({ navigation }: ScreenProps<'Autoplay'>) {
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
           <Text style={{ fontFamily: MONO.semibold, fontSize: 11.5, letterSpacing: 1.4, textTransform: 'uppercase', color: c.ink3 }}>
-            Pace — {pace.toFixed(1)}s per play
+            Pause between characters — {pause.toFixed(1)}s
           </Text>
-          <Text style={{ fontFamily: DISPLAY.bold, fontSize: 16, color: c.accentInk }}>{paceLabel}</Text>
+          <Text style={{ fontFamily: DISPLAY.bold, fontSize: 16, color: c.accentInk }}>{pauseLabel}</Text>
         </View>
-        <Slider min={PACE_MIN} max={PACE_MAX} step={0.2} value={pace} onChange={setPace} />
+        <Slider min={PAUSE_MIN} max={PAUSE_MAX} step={0.2} value={pause} onChange={setPause} />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 7 }}>
           <Text style={{ fontFamily: MONO.regular, fontSize: 11, color: c.ink3 }}>Fast</Text>
           <Text style={{ fontFamily: MONO.regular, fontSize: 11, color: c.ink3 }}>Slow</Text>

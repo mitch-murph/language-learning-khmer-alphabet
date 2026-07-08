@@ -57,6 +57,20 @@ export const AudioBus = {
     }
     notify();
   },
+  /** Plays a clip and resolves once it finishes (or is interrupted/stopped/errors). */
+  playAndWait(source: AudioSource, id: string): Promise<void> {
+    return new Promise((resolve) => {
+      let done = false;
+      const unsubscribe = AudioBus.subscribe((cur) => {
+        if (cur !== id && !done) {
+          done = true;
+          unsubscribe();
+          resolve();
+        }
+      });
+      AudioBus.play(source, id);
+    });
+  },
   stop() {
     if (player) {
       try {
